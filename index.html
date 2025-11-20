@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Bomber Arena - Story Mode</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Retro Bomber Arena - Mobile</title>
     <style>
         :root {
             --bg-color: #202028;
@@ -27,6 +27,8 @@
             height: 100vh;
             overflow: hidden;
             user-select: none;
+            /* Prevent pull-to-refresh on mobile */
+            overscroll-behavior: none;
         }
 
         #game-container {
@@ -34,11 +36,18 @@
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             border: 4px solid #444;
             background-color: #359e35;
+            /* Responsive scaling */
+            width: 100%;
+            max-width: 832px;
+            aspect-ratio: 13/11;
+            max-height: 70vh; /* Leave space for controls on mobile */
         }
 
         canvas {
             display: block;
             image-rendering: pixelated;
+            width: 100%;
+            height: 100%;
         }
 
         /* UI Overlay Styles */
@@ -67,6 +76,11 @@
             text-shadow: 4px 4px #000;
             margin-bottom: 10px;
         }
+        
+        /* Adjust title size for mobile */
+        @media (max-width: 600px) {
+            h1 { font-size: 2rem; }
+        }
 
         .btn {
             background: var(--ui-bg);
@@ -79,11 +93,13 @@
             font-family: inherit;
             transition: transform 0.1s, background 0.2s;
             min-width: 220px;
+            -webkit-tap-highlight-color: transparent;
         }
+
+        .btn:active { transform: scale(0.95); }
 
         .btn:hover {
             background: #555566;
-            transform: scale(1.05);
             border-color: var(--accent);
             color: var(--accent);
         }
@@ -111,6 +127,10 @@
             align-items: center;
             justify-content: space-between;
             width: 300px;
+        }
+        
+        @media (max-width: 400px) {
+            .setting-row { width: 100%; }
         }
 
         /* Toggle Switch */
@@ -143,23 +163,23 @@
 
         #editor-grid {
             display: grid;
-            grid-template-columns: repeat(13, 40px); /* Scaled down for UI */
-            grid-template-rows: repeat(11, 40px);
-            gap: 2px;
+            grid-template-columns: repeat(13, 1fr);
+            grid-template-rows: repeat(11, 1fr);
+            gap: 1px;
             background: #222;
-            padding: 10px;
+            padding: 5px;
             border: 2px solid #666;
             margin-bottom: 10px;
+            width: 90%;
+            max-width: 600px;
+            aspect-ratio: 13/11;
         }
 
         .editor-cell {
-            width: 40px;
-            height: 40px;
             background: #359e35;
-            border: 1px solid rgba(0,0,0,0.3);
+            border: 1px solid rgba(0,0,0,0.1);
             cursor: pointer;
         }
-        .editor-cell:hover { border-color: #fff; }
         .cell-wall { background-color: #555; }
         .cell-soft { background-color: #d2691e; }
         .cell-floor { background-color: #359e35; }
@@ -197,16 +217,17 @@
             display: flex;
             justify-content: space-between;
             width: 100%;
-            max-width: 800px;
+            max-width: 832px;
             margin-bottom: 5px;
             font-weight: bold;
+            font-size: 0.9rem;
         }
 
         .player-stat {
             display: flex;
-            gap: 15px;
+            gap: 10px;
             background: rgba(0,0,0,0.5);
-            padding: 5px 15px;
+            padding: 5px 10px;
             border-radius: 4px;
             align-items: center;
         }
@@ -219,6 +240,87 @@
         
         .p1-color { color: #ff4444; }
         .p2-color { color: #4488ff; }
+
+        /* ================= MOBILE CONTROLS ================= */
+        #mobile-controls {
+            display: none;
+            width: 100%;
+            height: 160px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            z-index: 50;
+            pointer-events: none; /* Allow clicks through empty space */
+            padding: 10px 20px;
+            box-sizing: border-box;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Show on devices smaller than 900px width (tablets/phones) */
+        @media (max-width: 900px) {
+            #mobile-controls { display: flex; }
+            body { justify-content: flex-start; padding-top: 10px; }
+            #game-container { margin-bottom: 170px; }
+            .controls-info { display: none; } /* Hide PC controls text on mobile */
+        }
+
+        .d-pad {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            pointer-events: auto;
+        }
+
+        .touch-btn {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        .touch-btn:active, .touch-btn.active {
+            background: rgba(255, 204, 0, 0.4);
+            border-color: var(--accent);
+            transform: scale(0.95);
+        }
+
+        .btn-up { top: 0; left: 47.5px; }
+        .btn-down { bottom: 0; left: 47.5px; }
+        .btn-left { top: 47.5px; left: 0; }
+        .btn-right { top: 47.5px; right: 0; }
+
+        .action-area {
+            pointer-events: auto;
+        }
+
+        .btn-bomb-touch {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: rgba(255, 68, 68, 0.3);
+            border: 3px solid #ff4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            user-select: none;
+            touch-action: none;
+        }
+        .btn-bomb-touch:active, .btn-bomb-touch.active {
+            background: rgba(255, 68, 68, 0.6);
+            transform: scale(0.95);
+        }
+
     </style>
 </head>
 <body>
@@ -228,15 +330,12 @@
             <span class="p1-color">P1</span>
             <span>♥ <span id="p1-lives">3</span></span>
             <span>💣 <span id="p1-bombs">1</span></span>
-            <span>🔥 <span id="p1-range">2</span></span>
         </div>
         <div id="level-info">第 1 關</div>
-        <div id="game-message" style="color:yellow">READY?</div>
         <div class="player-stat" id="p2-stats" style="opacity: 0;">
             <span class="p2-color">P2</span>
             <span>♥ <span id="p2-lives">3</span></span>
             <span>💣 <span id="p2-bombs">1</span></span>
-            <span>🔥 <span id="p2-range">2</span></span>
         </div>
     </div>
 
@@ -246,7 +345,7 @@
         <!-- Main Menu -->
         <div id="main-menu" class="overlay">
             <h1>BOMBER ARENA</h1>
-            <h3 style="color:#aaa; margin-top:-10px;">闖關進化版</h3>
+            <h3 style="color:#aaa; margin-top:-10px;">MOBILE EDITION</h3>
             
             <div class="settings-box">
                 <div class="setting-row">
@@ -280,11 +379,10 @@
         <!-- Editor UI -->
         <div id="editor-ui" class="hidden">
             <h2 style="color: var(--accent);">CUSTOM MAP EDITOR</h2>
-            <p style="color: #ccc; font-size: 0.9rem;">點擊格子切換：地板 -> 牆壁 -> 箱子</p>
             <div id="editor-grid"></div>
             <div>
-                <button class="btn" onclick="saveAndCloseEditor()">儲存並返回</button>
-                <button class="btn btn-small" style="background: #444;" onclick="clearEditorMap()">重置 (全空)</button>
+                <button class="btn" onclick="saveAndCloseEditor()">儲存</button>
+                <button class="btn btn-small" style="background: #444;" onclick="clearEditorMap()">清空</button>
                 <button class="btn btn-small" style="background: #444;" onclick="cancelEditor()">取消</button>
             </div>
         </div>
@@ -294,10 +392,23 @@
             <h1 id="go-title">GAME OVER</h1>
             <h2 id="go-reason">Reason</h2>
             <div id="next-level-btn-container" class="hidden">
-                <p style="color: #ccc;">你的能力將繼承到下一關！</p>
-                <button class="btn" onclick="gameInstance.nextLevel()">進入下一關</button>
+                <p style="color: #ccc;">能力保留至下一關！</p>
+                <button class="btn" onclick="gameInstance.nextLevel()">下一關</button>
             </div>
             <button id="return-menu-btn" class="btn" onclick="returnToMenu()">回到選單</button>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="touch-btn btn-up" data-key="ArrowUp">↑</div>
+            <div class="touch-btn btn-left" data-key="ArrowLeft">←</div>
+            <div class="touch-btn btn-right" data-key="ArrowRight">→</div>
+            <div class="touch-btn btn-down" data-key="ArrowDown">↓</div>
+        </div>
+        <div class="action-area">
+            <div class="touch-btn btn-bomb-touch" data-key="Space">💣</div>
         </div>
     </div>
 
@@ -390,11 +501,39 @@
                 this.isPaused = false;
                 this.roundOver = false;
                 this.level = 1;
-                this.savedStats = null; // Store player stats between levels
+                this.savedStats = null; 
                 
                 this.keys = {};
                 window.addEventListener('keydown', e => this.keys[e.code] = true);
                 window.addEventListener('keyup', e => this.keys[e.code] = false);
+
+                // Setup Mobile Controls
+                this.setupTouchControls();
+            }
+
+            setupTouchControls() {
+                const touchBtns = document.querySelectorAll('.touch-btn, .btn-bomb-touch');
+                
+                const handleTouch = (e, state) => {
+                    e.preventDefault(); // Prevent scrolling/zooming
+                    const key = e.currentTarget.getAttribute('data-key');
+                    if (key) {
+                        this.keys[key] = state;
+                        if(state) e.currentTarget.classList.add('active');
+                        else e.currentTarget.classList.remove('active');
+                    }
+                };
+
+                touchBtns.forEach(btn => {
+                    // Touch Events
+                    btn.addEventListener('touchstart', (e) => handleTouch(e, true), {passive: false});
+                    btn.addEventListener('touchend', (e) => handleTouch(e, false), {passive: false});
+                    
+                    // Mouse Events (for testing on PC with mouse click)
+                    btn.addEventListener('mousedown', (e) => handleTouch(e, true));
+                    btn.addEventListener('mouseup', (e) => handleTouch(e, false));
+                    btn.addEventListener('mouseleave', (e) => handleTouch(e, false));
+                });
             }
 
             reset(mode, keepProgress = false) {
@@ -444,18 +583,14 @@
                     document.getElementById('p2-stats').style.opacity = 1;
                 } else {
                     // Single Player Enemy Spawning Logic
-                    // Base: 3 enemies. Add 1 every level.
                     let enemyCount = 2 + this.level;
                     if (currentDifficulty === 'hard') enemyCount += 2;
-                    
-                    // Cap max enemies to avoid flooding
                     enemyCount = Math.min(enemyCount, 12);
-
                     this.spawnEnemies(enemyCount);
                     document.getElementById('p2-stats').style.opacity = 0;
                 }
 
-                const msg = (mode === 'single') ? `第 ${this.level} 關 START!` : "READY? GO!";
+                const msg = (mode === 'single') ? `第 ${this.level} 關` : "READY?";
                 document.getElementById('game-message').innerText = msg;
                 setTimeout(() => document.getElementById('game-message').innerText = "", 2000);
                 
@@ -478,7 +613,6 @@
                         } else {
                             const isP1Safe = (r < 3 && c < 3);
                             const isP2Safe = (r > ROWS - 4 && c > COLS - 4);
-                            // Higher levels might have slightly more walls to be tricky, or random
                             if (!isP1Safe && !isP2Safe && Math.random() < 0.7) {
                                 row.push(TILE_SOFT);
                             } else {
@@ -493,8 +627,6 @@
             spawnEnemies(count) {
                 let spawned = 0;
                 let attempts = 0;
-                
-                // Calculate speed multiplier based on level (e.g., +5% speed per level)
                 const speedMultiplier = 1 + (this.level - 1) * 0.05;
 
                 while (spawned < count && attempts < 200) {
@@ -502,20 +634,16 @@
                     let c = Math.floor(Math.random() * COLS);
                     
                     if (this.map[r][c] === TILE_FLOOR && r > 4 && c > 4) {
-                        // Determine difficulty for this specific enemy
                         let type = 'normal';
                         if (currentDifficulty === 'easy') type = 'easy';
                         else if (currentDifficulty === 'hard') type = 'hard';
                         else {
-                            // In normal mode, higher levels spawn some Hard enemies
                             if (this.level >= 3 && Math.random() < 0.3) type = 'hard';
                             else if (this.level >= 5 && Math.random() < 0.5) type = 'hard';
                         }
 
                         const enemy = new Enemy(c, r, type);
-                        // Apply level speed buff
                         enemy.speed *= speedMultiplier;
-                        
                         this.entities.push(enemy);
                         spawned++;
                     }
@@ -560,7 +688,6 @@
                     if (!p1 || !p1.alive) {
                         this.endGame("Game Over!", false);
                     } else if (enemies.length === 0) {
-                        // Stage Cleared
                         this.levelCleared();
                     }
                 }
@@ -571,12 +698,10 @@
                 if (this.p1) {
                     document.getElementById('p1-lives').innerText = this.p1.lives;
                     document.getElementById('p1-bombs').innerText = this.p1.maxBombs;
-                    document.getElementById('p1-range').innerText = this.p1.bombRange;
                 }
                 if (this.p2) {
                     document.getElementById('p2-lives').innerText = this.p2.lives;
                     document.getElementById('p2-bombs').innerText = this.p2.maxBombs;
-                    document.getElementById('p2-range').innerText = this.p2.bombRange;
                 }
             }
 
@@ -669,22 +794,18 @@
                 this.roundOver = true;
                 AudioEngine.playWin();
                 
-                // Save stats for next level
                 this.savedStats = {
                     maxBombs: this.p1.maxBombs,
                     bombRange: this.p1.bombRange,
                     speed: this.p1.speed
                 };
 
-                // Auto advance after short delay or show menu
-                // Let's show a "Level Complete" screen with "Next Level" button
                 setTimeout(() => {
                     document.getElementById('game-over').classList.remove('hidden');
                     document.getElementById('go-title').innerText = "關卡通過！";
                     document.getElementById('go-title').style.color = "#44ff44";
                     document.getElementById('go-reason').innerText = `完成第 ${this.level} 關`;
                     
-                    // Show Next Level Button, Hide Return Button (optional, or show both)
                     document.getElementById('next-level-btn-container').classList.remove('hidden');
                     document.getElementById('return-menu-btn').classList.add('hidden');
                     
@@ -695,7 +816,7 @@
             nextLevel() {
                 this.level++;
                 document.getElementById('game-over').classList.add('hidden');
-                this.reset('single', true); // Keep progress
+                this.reset('single', true); 
             }
 
             endGame(reason, win) {
@@ -816,7 +937,7 @@
 
             collectPowerup(p) {
                 if (p.type === 'range') this.bombRange++;
-                if (p.type === 'speed') this.speed = Math.min(this.speed + 50, 450); // Cap speed
+                if (p.type === 'speed') this.speed = Math.min(this.speed + 50, 450); 
                 if (p.type === 'bomb') this.maxBombs++;
             }
 
@@ -974,7 +1095,6 @@
                         
                         if (game.map[nr][nc] === TILE_SOFT) {
                             game.map[nr][nc] = TILE_FLOOR;
-                            // Frenzy Mode Drop Rate
                             const dropChance = frenzyMode ? 0.8 : 0.3;
                             if (Math.random() < dropChance) {
                                 const types = ['range', 'speed', 'bomb'];
@@ -1004,7 +1124,6 @@
         /* ================= EDITOR & UI LOGIC ================= */
         const gameInstance = new Game();
 
-        // Initial Config
         const diffLabels = { 'easy': '簡單', 'normal': '普通', 'hard': '困難' };
         document.getElementById('btn-diff').innerText = diffLabels[currentDifficulty];
 
@@ -1056,11 +1175,9 @@
             const grid = document.getElementById('editor-grid');
             grid.innerHTML = '';
             
-            // Initialize editor map from custom or default
             if (customMapData) {
                 editorMap = JSON.parse(JSON.stringify(customMapData));
             } else {
-                // Create empty map with perimeter walls
                 editorMap = [];
                 for (let r = 0; r < ROWS; r++) {
                     const row = [];
@@ -1073,7 +1190,6 @@
                 }
             }
 
-            // Render Grid
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
                     const cell = document.createElement('div');
@@ -1081,12 +1197,11 @@
                     cell.dataset.r = r;
                     cell.dataset.c = c;
                     
-                    // Safety Check for spawns (TopLeft, BottomRight)
                     const isSpawn = (r===1 && c===1) || (r===ROWS-2 && c===COLS-2);
                     if(isSpawn) cell.classList.add('cell-spawn');
 
                     cell.onclick = () => {
-                        if (isSpawn) return; // Protect spawns
+                        if (isSpawn) return;
                         toggleEditorTile(r, c, cell);
                     };
                     
