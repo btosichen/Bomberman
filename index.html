@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro Bomber Arena - Mobile</title>
+    <title>Retro Bomber Arena - Mobile Fixed</title>
     <style>
         :root {
             --bg-color: #202028;
@@ -27,7 +27,6 @@
             height: 100vh;
             overflow: hidden;
             user-select: none;
-            /* Prevent pull-to-refresh on mobile */
             overscroll-behavior: none;
         }
 
@@ -36,11 +35,10 @@
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             border: 4px solid #444;
             background-color: #359e35;
-            /* Responsive scaling */
             width: 100%;
             max-width: 832px;
             aspect-ratio: 13/11;
-            max-height: 70vh; /* Leave space for controls on mobile */
+            max-height: 70vh; 
         }
 
         canvas {
@@ -77,7 +75,6 @@
             margin-bottom: 10px;
         }
         
-        /* Adjust title size for mobile */
         @media (max-width: 600px) {
             h1 { font-size: 2rem; }
         }
@@ -237,6 +234,22 @@
             font-size: 1.2rem;
             text-shadow: 1px 1px #000;
         }
+
+        /* Game Message Overlay (FIXED) */
+        #game-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-weight: bold;
+            color: yellow;
+            text-shadow: 3px 3px 0 #000;
+            pointer-events: none;
+            z-index: 15;
+            white-space: nowrap;
+            text-align: center;
+        }
         
         .p1-color { color: #ff4444; }
         .p2-color { color: #4488ff; }
@@ -250,19 +263,18 @@
             bottom: 0;
             left: 0;
             z-index: 50;
-            pointer-events: none; /* Allow clicks through empty space */
+            pointer-events: none; 
             padding: 10px 20px;
             box-sizing: border-box;
             justify-content: space-between;
             align-items: center;
         }
 
-        /* Show on devices smaller than 900px width (tablets/phones) */
         @media (max-width: 900px) {
             #mobile-controls { display: flex; }
             body { justify-content: flex-start; padding-top: 10px; }
             #game-container { margin-bottom: 170px; }
-            .controls-info { display: none; } /* Hide PC controls text on mobile */
+            .controls-info { display: none; } 
         }
 
         .d-pad {
@@ -342,6 +354,9 @@
     <div id="game-container">
         <canvas id="gameCanvas" width="832" height="704"></canvas>
         
+        <!-- Added missing message element -->
+        <div id="game-message"></div>
+
         <!-- Main Menu -->
         <div id="main-menu" class="overlay">
             <h1>BOMBER ARENA</h1>
@@ -592,7 +607,10 @@
 
                 const msg = (mode === 'single') ? `第 ${this.level} 關` : "READY?";
                 document.getElementById('game-message').innerText = msg;
-                setTimeout(() => document.getElementById('game-message').innerText = "", 2000);
+                setTimeout(() => {
+                    const msgEl = document.getElementById('game-message');
+                    if(msgEl) msgEl.innerText = "";
+                }, 2000);
                 
                 requestAnimationFrame(t => this.loop(t));
             }
