@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Bomber Arena - Expanded</title>
+    <title>Retro Bomber Arena - Story Mode</title>
     <style>
         :root {
             --bg-color: #202028;
@@ -210,6 +210,12 @@
             border-radius: 4px;
             align-items: center;
         }
+
+        #level-info {
+            color: var(--accent);
+            font-size: 1.2rem;
+            text-shadow: 1px 1px #000;
+        }
         
         .p1-color { color: #ff4444; }
         .p2-color { color: #4488ff; }
@@ -219,14 +225,15 @@
 
     <div id="hud">
         <div class="player-stat" id="p1-stats">
-            <span class="p1-color">P1 (紅)</span>
+            <span class="p1-color">P1</span>
             <span>♥ <span id="p1-lives">3</span></span>
             <span>💣 <span id="p1-bombs">1</span></span>
             <span>🔥 <span id="p1-range">2</span></span>
         </div>
+        <div id="level-info">第 1 關</div>
         <div id="game-message" style="color:yellow">READY?</div>
         <div class="player-stat" id="p2-stats" style="opacity: 0;">
-            <span class="p2-color">P2 (藍)</span>
+            <span class="p2-color">P2</span>
             <span>♥ <span id="p2-lives">3</span></span>
             <span>💣 <span id="p2-bombs">1</span></span>
             <span>🔥 <span id="p2-range">2</span></span>
@@ -239,6 +246,7 @@
         <!-- Main Menu -->
         <div id="main-menu" class="overlay">
             <h1>BOMBER ARENA</h1>
+            <h3 style="color:#aaa; margin-top:-10px;">闖關進化版</h3>
             
             <div class="settings-box">
                 <div class="setting-row">
@@ -251,7 +259,7 @@
                 </div>
             </div>
 
-            <button class="btn" onclick="startGame('single')">單人闖關 (Single)</button>
+            <button class="btn" onclick="startGame('single')">單人闖關 (Story)</button>
             <button class="btn" onclick="startGame('versus')">雙人對戰 (Vs)</button>
             <button class="btn" style="border-color: #aaa; color: #aaa;" onclick="openEditor()">關卡編輯器 (Editor)</button>
             
@@ -281,11 +289,15 @@
             </div>
         </div>
 
-        <!-- Game Over Screen -->
+        <!-- Level Cleared / Game Over Screen -->
         <div id="game-over" class="overlay hidden">
             <h1 id="go-title">GAME OVER</h1>
-            <h2 id="go-reason">Player 1 Wins!</h2>
-            <button class="btn" onclick="returnToMenu()">MAIN MENU</button>
+            <h2 id="go-reason">Reason</h2>
+            <div id="next-level-btn-container" class="hidden">
+                <p style="color: #ccc;">你的能力將繼承到下一關！</p>
+                <button class="btn" onclick="gameInstance.nextLevel()">進入下一關</button>
+            </div>
+            <button id="return-menu-btn" class="btn" onclick="returnToMenu()">回到選單</button>
         </div>
     </div>
 
@@ -297,15 +309,14 @@
         const CANVAS_WIDTH = COLS * TILE_SIZE;
         const CANVAS_HEIGHT = ROWS * TILE_SIZE;
         
-        // Map Codes
         const TILE_FLOOR = 0;
-        const TILE_WALL = 1; // Indestructible
-        const TILE_SOFT = 2; // Destructible
+        const TILE_WALL = 1;
+        const TILE_SOFT = 2;
         
         // Settings State
-        let currentDifficulty = 'normal'; // easy, normal, hard
+        let currentDifficulty = 'normal'; 
         let frenzyMode = false;
-        let customMapData = null; // Arrays of rows
+        let customMapData = null;
 
         /* ================= AUDIO ENGINE ================= */
         const AudioEngine = {
@@ -354,6 +365,11 @@
             playDie: function() {
                 this.playTone(300, 'sawtooth', 0.5, 0.2);
                 setTimeout(() => this.playTone(150, 'sawtooth', 0.5, 0.2), 200);
+            },
+            playWin: function() {
+                this.playTone(400, 'sine', 0.1);
+                setTimeout(() => this.playTone(600, 'sine', 0.1), 150);
+                setTimeout(() => this.playTone(800, 'sine', 0.3), 300);
             }
         };
 
@@ -373,13 +389,15 @@
                 this.isRunning = false;
                 this.isPaused = false;
                 this.roundOver = false;
+                this.level = 1;
+                this.savedStats = null; // Store player stats between levels
                 
                 this.keys = {};
                 window.addEventListener('keydown', e => this.keys[e.code] = true);
                 window.addEventListener('keyup', e => this.keys[e.code] = false);
             }
 
-            reset(mode) {
+            reset(mode, keepProgress = false) {
                 this.mode = mode;
                 this.map = [];
                 this.entities = [];
@@ -388,13 +406,26 @@
                 this.powerups = [];
                 this.roundOver = false;
                 this.isRunning = true;
-                
+
+                if (!keepProgress) {
+                    this.level = 1;
+                    this.savedStats = null;
+                }
+
+                // Update HUD Level
+                const lvlText = (mode === 'single') ? `第 ${this.level} 關` : '對戰模式';
+                document.getElementById('level-info').innerText = lvlText;
+
                 this.generateMap();
                 
-                // Add Players
-                // P1: Top Left (1,1)
+                // Player 1 Setup
                 this.p1 = new Player(1, 1, 1, 'Red'); 
-                if (frenzyMode) {
+                // Restore stats if progressing
+                if (this.savedStats) {
+                    this.p1.maxBombs = this.savedStats.maxBombs;
+                    this.p1.bombRange = this.savedStats.bombRange;
+                    this.p1.speed = this.savedStats.speed;
+                } else if (frenzyMode) {
                     this.p1.maxBombs = 3;
                     this.p1.bombRange = 3;
                     this.p1.speed += 20;
@@ -402,7 +433,7 @@
                 this.entities.push(this.p1);
 
                 if (mode === 'versus') {
-                    // P2: Bottom Right
+                    // P2 Setup
                     this.p2 = new Player(COLS - 2, ROWS - 2, 2, 'Blue');
                     if (frenzyMode) {
                         this.p2.maxBombs = 3;
@@ -412,21 +443,27 @@
                     this.entities.push(this.p2);
                     document.getElementById('p2-stats').style.opacity = 1;
                 } else {
-                    // Single Player Enemies
-                    this.spawnEnemies(4); // Base count
+                    // Single Player Enemy Spawning Logic
+                    // Base: 3 enemies. Add 1 every level.
+                    let enemyCount = 2 + this.level;
+                    if (currentDifficulty === 'hard') enemyCount += 2;
+                    
+                    // Cap max enemies to avoid flooding
+                    enemyCount = Math.min(enemyCount, 12);
+
+                    this.spawnEnemies(enemyCount);
                     document.getElementById('p2-stats').style.opacity = 0;
                 }
 
-                document.getElementById('game-message').innerText = "GO!";
+                const msg = (mode === 'single') ? `第 ${this.level} 關 START!` : "READY? GO!";
+                document.getElementById('game-message').innerText = msg;
                 setTimeout(() => document.getElementById('game-message').innerText = "", 2000);
                 
                 requestAnimationFrame(t => this.loop(t));
             }
 
             generateMap() {
-                // Priority: Custom Map > Generated Map
                 if (customMapData) {
-                    // Deep copy custom map
                     this.map = JSON.parse(JSON.stringify(customMapData));
                     return;
                 }
@@ -434,20 +471,14 @@
                 for (let r = 0; r < ROWS; r++) {
                     const row = [];
                     for (let c = 0; c < COLS; c++) {
-                        // Perimeter
                         if (r === 0 || c === 0 || r === ROWS - 1 || c === COLS - 1) {
                             row.push(TILE_WALL);
-                        } 
-                        // Fixed Grid
-                        else if (r % 2 === 0 && c % 2 === 0) {
+                        } else if (r % 2 === 0 && c % 2 === 0) {
                             row.push(TILE_WALL);
-                        } 
-                        // Random Soft Blocks
-                        else {
-                            // Safe zones for P1 and P2 spawns
+                        } else {
                             const isP1Safe = (r < 3 && c < 3);
                             const isP2Safe = (r > ROWS - 4 && c > COLS - 4);
-                            
+                            // Higher levels might have slightly more walls to be tricky, or random
                             if (!isP1Safe && !isP2Safe && Math.random() < 0.7) {
                                 row.push(TILE_SOFT);
                             } else {
@@ -461,16 +492,31 @@
 
             spawnEnemies(count) {
                 let spawned = 0;
-                // Add more enemies for hard mode
-                if (currentDifficulty === 'hard') count += 2;
-
                 let attempts = 0;
-                while (spawned < count && attempts < 100) {
+                
+                // Calculate speed multiplier based on level (e.g., +5% speed per level)
+                const speedMultiplier = 1 + (this.level - 1) * 0.05;
+
+                while (spawned < count && attempts < 200) {
                     let r = Math.floor(Math.random() * ROWS);
                     let c = Math.floor(Math.random() * COLS);
-                    // Spawn only on floor in middle area
+                    
                     if (this.map[r][c] === TILE_FLOOR && r > 4 && c > 4) {
-                        this.entities.push(new Enemy(c, r, currentDifficulty));
+                        // Determine difficulty for this specific enemy
+                        let type = 'normal';
+                        if (currentDifficulty === 'easy') type = 'easy';
+                        else if (currentDifficulty === 'hard') type = 'hard';
+                        else {
+                            // In normal mode, higher levels spawn some Hard enemies
+                            if (this.level >= 3 && Math.random() < 0.3) type = 'hard';
+                            else if (this.level >= 5 && Math.random() < 0.5) type = 'hard';
+                        }
+
+                        const enemy = new Enemy(c, r, type);
+                        // Apply level speed buff
+                        enemy.speed *= speedMultiplier;
+                        
+                        this.entities.push(enemy);
                         spawned++;
                     }
                     attempts++;
@@ -504,15 +550,18 @@
                     const p1Alive = this.entities.find(e => e.id === 1 && e.alive);
                     const p2Alive = this.entities.find(e => e.id === 2 && e.alive);
                     if (!p1Alive || !p2Alive) {
-                        this.endGame(p1Alive ? "Player 1 Wins!" : (p2Alive ? "Player 2 Wins!" : "Draw!"));
+                        this.endGame(p1Alive ? "Player 1 Wins!" : (p2Alive ? "Player 2 Wins!" : "Draw!"), false);
                     }
                 } else {
+                    // Single Player
                     const p1 = this.entities.find(e => e.id === 1);
                     const enemies = this.entities.filter(e => e.type === 'enemy');
+                    
                     if (!p1 || !p1.alive) {
-                        this.endGame("Game Over!");
+                        this.endGame("Game Over!", false);
                     } else if (enemies.length === 0) {
-                        this.endGame("Stage Cleared!");
+                        // Stage Cleared
+                        this.levelCleared();
                     }
                 }
                 this.updateHUD();
@@ -616,11 +665,50 @@
                 });
             }
 
-            endGame(reason) {
+            levelCleared() {
+                this.roundOver = true;
+                AudioEngine.playWin();
+                
+                // Save stats for next level
+                this.savedStats = {
+                    maxBombs: this.p1.maxBombs,
+                    bombRange: this.p1.bombRange,
+                    speed: this.p1.speed
+                };
+
+                // Auto advance after short delay or show menu
+                // Let's show a "Level Complete" screen with "Next Level" button
+                setTimeout(() => {
+                    document.getElementById('game-over').classList.remove('hidden');
+                    document.getElementById('go-title').innerText = "關卡通過！";
+                    document.getElementById('go-title').style.color = "#44ff44";
+                    document.getElementById('go-reason').innerText = `完成第 ${this.level} 關`;
+                    
+                    // Show Next Level Button, Hide Return Button (optional, or show both)
+                    document.getElementById('next-level-btn-container').classList.remove('hidden');
+                    document.getElementById('return-menu-btn').classList.add('hidden');
+                    
+                    this.isRunning = false;
+                }, 1000);
+            }
+
+            nextLevel() {
+                this.level++;
+                document.getElementById('game-over').classList.add('hidden');
+                this.reset('single', true); // Keep progress
+            }
+
+            endGame(reason, win) {
                 this.roundOver = true;
                 setTimeout(() => {
                     document.getElementById('game-over').classList.remove('hidden');
+                    document.getElementById('go-title').innerText = "GAME OVER";
+                    document.getElementById('go-title').style.color = "#ff4444";
                     document.getElementById('go-reason').innerText = reason;
+                    
+                    document.getElementById('next-level-btn-container').classList.add('hidden');
+                    document.getElementById('return-menu-btn').classList.remove('hidden');
+                    
                     this.isRunning = false;
                 }, 1000);
             }
@@ -728,7 +816,7 @@
 
             collectPowerup(p) {
                 if (p.type === 'range') this.bombRange++;
-                if (p.type === 'speed') this.speed = Math.min(this.speed + 50, 400);
+                if (p.type === 'speed') this.speed = Math.min(this.speed + 50, 450); // Cap speed
                 if (p.type === 'bomb') this.maxBombs++;
             }
 
@@ -1009,9 +1097,6 @@
         }
 
         function toggleEditorTile(r, c, cell) {
-            // Cycle: Floor (0) -> Wall (1) -> Soft (2) -> Floor (0)
-            // But logic: Fixed grid walls (1) should probably stay fixed for classic feel, 
-            // but let's allow total freedom except spawns.
             let val = editorMap[r][c];
             val = (val + 1) % 3;
             editorMap[r][c] = val;
@@ -1034,14 +1119,12 @@
         function clearEditorMap() {
              for (let r = 1; r < ROWS - 1; r++) {
                 for (let c = 1; c < COLS - 1; c++) {
-                    // Don't clear fixed grid pillars if you want classic feel, but user asked for editor.
-                    // Let's clear everything inside perimeter
                      if (!((r===1 && c===1) || (r===ROWS-2 && c===COLS-2))) {
                          editorMap[r][c] = TILE_FLOOR;
                      }
                 }
             }
-            initEditorGrid(); // Re-render
+            initEditorGrid(); 
         }
 
         function cancelEditor() {
