@@ -31,9 +31,10 @@
             overscroll-behavior: none;
         }
 
+        /* ✅ 淡綠色背景 -> 淡藍色背景 */
         #game-container {
             position: relative;
-            background-color: #4cd137;
+            background-color: #7ed6df; /* light blue */
             box-shadow: 0 0 50px rgba(0,0,0,0.8);
             width: auto;
             height: 90vh;
@@ -173,14 +174,15 @@
             aspect-ratio: 13/11;
         }
 
+        /* ✅ 編輯器淡綠 -> 淡藍 */
         .editor-cell {
-            background: #4cd137;
+            background: #7ed6df;
             border: 1px solid rgba(0,0,0,0.1);
             cursor: pointer;
         }
         .cell-wall { background-color: #718093; }
         .cell-soft { background-color: #e1b12c; }
-        .cell-floor { background-color: #4cd137; }
+        .cell-floor { background-color: #7ed6df; }
         .cell-spawn { 
             background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text y="8" font-size="8">🚩</text></svg>'); 
             background-repeat: no-repeat;
@@ -494,10 +496,18 @@
         const COLS = 13;
         const CANVAS_WIDTH = COLS * TILE_SIZE;
         const CANVAS_HEIGHT = ROWS * TILE_SIZE;
+
+        // ✅ 淡藍地板色（同時用於畫布底色/編輯器地板）
+        const FLOOR_COLOR = '#7ed6df';
         
         const TILE_FLOOR = 0;
         const TILE_WALL = 1;
         const TILE_SOFT = 2;
+
+        // ✅ 三隻動物（每局隨機抽三種，抽到後固定不變）
+        const ANIMAL_POOL = ['🐛','🐞','🐜','🪲','🦗','🐝'];
+        // 🐞 = 炸彈蟲（會丟炸彈）｜🐛 = 菜蟲（普通）
+        // 第三隻（例如 🐜）只是外觀，用來滿足「3隻動物隨機固定」
         
         let currentDifficulty = 'normal'; 
         let frenzyMode = false;
@@ -585,6 +595,9 @@
                 this.roundOver = false;
                 this.level = 1;
                 this.savedStats = null; 
+
+                // ✅ 每局隨機固定的三隻動物（外觀用）
+                this.animalSet = null;
                 
                 this.keys = {};
                 window.addEventListener('keydown', e => this.keys[e.code] = true);
@@ -624,6 +637,9 @@
                 this.powerups = [];
                 this.roundOver = false;
                 this.isRunning = true;
+
+                // ✅ 每次開局（或下一關）都「隨機一次」但該局固定
+                this.animalSet = this.pickThreeAnimals();
 
                 if (!keepProgress) {
                     this.level = 1;
@@ -674,6 +690,17 @@
                 requestAnimationFrame(t => this.loop(t));
             }
 
+            pickThreeAnimals() {
+                const pool = [...ANIMAL_POOL];
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+                // 固定三種：index 0=菜蟲外觀、1=炸彈蟲外觀、2=第三種外觀
+                // 但我們仍保留「🐛/🐞」語意：顯示上用抽到的三個，不影響功能
+                return [pool[0], pool[1], pool[2]];
+            }
+
             generateMap() {
                 if (customMapData) {
                     this.map = JSON.parse(JSON.stringify(customMapData));
@@ -706,18 +733,27 @@
                 let attempts = 0;
                 const speedMultiplier = 1 + (this.level - 1) * 0.05;
 
-                // Spawn 1 Boss
+                // ✅ Spawn 1 Boss（原設定保留）
                 let bossSpawned = false;
+
+                // ✅ 非Boss敵人：炸彈蟲 vs 菜蟲 = 1:1
+                // 這裡的 count 是「總敵人數（含Boss）」
+                // 我們維持「先塞一隻Boss」，剩下的再 1:1 分配
+                const nonBossTotal = Math.max(0, count - 1);
+                const bombBugTarget = Math.floor(nonBossTotal / 2);
+                const vegBugTarget  = nonBossTotal - bombBugTarget; // 確保總數一致（差一隻時給菜蟲）
+
+                let bombBugMade = 0;
+                let vegBugMade = 0;
 
                 while (spawned < count && attempts < 200) {
                     let r = Math.floor(Math.random() * ROWS);
                     let c = Math.floor(Math.random() * COLS);
                     
                     if (this.map[r][c] === TILE_FLOOR && r > 4 && c > 4) {
-                        let type = 'normal';
-                        // Determine type
-                        if (currentDifficulty === 'easy') type = 'easy';
-                        else if (currentDifficulty === 'hard') type = 'hard';
+                        let diffType = 'normal';
+                        if (currentDifficulty === 'easy') diffType = 'easy';
+                        else if (currentDifficulty === 'hard') diffType = 'hard';
                         
                         let isBoss = false;
                         if (!bossSpawned) {
@@ -725,16 +761,36 @@
                             bossSpawned = true;
                         }
 
-                        const enemy = new Enemy(c, r, type, isBoss);
+                        // ✅ 三隻動物外觀隨機固定（每局固定）
+                        let species = 'veg'; // 菜蟲
+                        if (!isBoss) {
+                            // 先做滿 1:1
+                            if (bombBugMade < bombBugTarget) {
+                                species = 'bomb'; // 炸彈蟲
+                            } else {
+                                species = 'veg';
+                            }
+                        } else {
+                            species = 'boss';
+                        }
+
+                        const enemy = new Enemy(c, r, diffType, isBoss, species, this.animalSet);
+
+                        // ✅ 調整速度：炸彈蟲「爬行速度變慢一點」
+                        // （Boss 的速度仍維持原邏輯）
                         if (!isBoss) {
                             enemy.speed *= speedMultiplier;
                         } else {
-                            // Boss base speed
                             enemy.speed = 130 + (this.level * 5); 
                         }
                         
                         this.entities.push(enemy);
                         spawned++;
+
+                        if (!isBoss) {
+                            if (species === 'bomb') bombBugMade++;
+                            else vegBugMade++;
+                        }
                     }
                     attempts++;
                 }
@@ -793,7 +849,8 @@
             }
 
             draw() {
-                this.ctx.fillStyle = '#4cd137';
+                // ✅ 淡綠 -> 淡藍
+                this.ctx.fillStyle = FLOOR_COLOR;
                 this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
                 for (let r = 0; r < ROWS; r++) {
@@ -1064,13 +1121,20 @@
         }
 
         class Enemy extends Entity {
-            constructor(c, r, difficulty, isBoss = false) {
+            constructor(c, r, difficulty, isBoss = false, species = 'veg', animalSet = ['🐛','🐞','🐜']) {
                 super(c, r, 'enemy');
                 this.difficulty = difficulty;
                 this.dir = {x: 1, y: 0};
                 this.isBoss = isBoss;
-                
-                this.maxBombs = isBoss ? 2 : 0; // Only boss has bombs
+
+                // ✅ 物種：veg=菜蟲｜bomb=炸彈蟲｜boss=Boss
+                this.species = species;
+
+                // ✅ 每局固定的三隻動物外觀
+                this.animalSet = animalSet;
+
+                // --- 原本 Boss 設定保留 ---
+                this.maxBombs = isBoss ? 2 : 0;
                 this.placedBombs = 0;
                 this.bombRange = (difficulty === 'hard' || isBoss) ? 3 : 2; 
                 this.bombCooldown = 0; 
@@ -1078,21 +1142,23 @@
                 this.lives = isBoss ? 3 : 1;
                 this.invincible = 0;
                 
-                if (this.difficulty === 'easy') {
-                    this.speed = 80;
-                }
-                else if (this.difficulty === 'normal') {
-                    this.speed = 120;
-                }
-                else if (this.difficulty === 'hard') {
-                    this.speed = 170;
-                }
+                if (this.difficulty === 'easy') this.speed = 80;
+                else if (this.difficulty === 'normal') this.speed = 120;
+                else this.speed = 170;
                 
                 if (this.isBoss) {
                     this.canBomb = true;
-                    this.speed = 140; // Base speed for boss
+                    this.speed = 140;
                 } else {
-                    this.canBomb = false;
+                    // ✅ 炸彈蟲可丟炸彈，菜蟲不丟
+                    this.canBomb = (this.species === 'bomb');
+
+                    // ✅ 炸彈蟲數量已在 spawnEnemies 做到 1:1
+                    // ✅ 炸彈蟲「爬行速度變慢一點」
+                    if (this.species === 'bomb') {
+                        this.speed *= 0.75;  // 變慢（你也可以改成 0.7 更慢）
+                        this.maxBombs = 1;
+                    }
                 }
             }
 
@@ -1101,15 +1167,12 @@
                 if (this.bombCooldown > 0) this.bombCooldown -= dt;
                 if (this.escapeTime > 0) this.escapeTime -= dt;
 
-                // Boss Special: Rage Mode (Low HP)
+                // Boss Rage Mode（原樣保留）
                 if (this.isBoss && this.lives < 3) {
-                    // Angry mode: faster speed, reduced cooldown
                     this.speed = 220; 
                 }
 
-                // AI Decision Making
                 if (this.escapeTime <= 0) {
-                    // Boss seeks player or wanders
                     if (this.isBoss || this.difficulty === 'hard') {
                         const p1 = game.entities.find(e => e.id === 1 && e.alive);
                         if (p1 && Math.random() < 0.05) {
@@ -1124,7 +1187,6 @@
                     }
                 }
 
-                // Movement
                 const nextX = this.x + this.dir.x * this.speed * dt;
                 const nextY = this.y + this.dir.y * this.speed * dt;
                 const collision = this.checkCollision(nextX, nextY, game);
@@ -1134,27 +1196,30 @@
                 } else {
                     this.x = nextX;
                     this.y = nextY;
-                    
-                    // Bomb Logic (Only Boss)
-                    if (this.isBoss && this.canBomb && this.bombCooldown <= 0 && this.escapeTime <= 0) {
+
+                    // ✅ 炸彈蟲（+Boss）炸彈邏輯
+                    if (this.canBomb && this.bombCooldown <= 0 && this.escapeTime <= 0) {
                         const p1 = game.entities.find(e => e.id === 1 && e.alive);
                         if (p1) {
                             const dist = Math.abs(p1.x - this.x) + Math.abs(p1.y - this.y);
-                            // Attack if player is close or just randomly to create chaos
-                            let bombChance = this.lives < 3 ? 0.08 : 0.03; // Higher chance when angry
+                            let bombChance = 0;
+
+                            if (this.isBoss) {
+                                bombChance = this.lives < 3 ? 0.08 : 0.03;
+                            } else if (this.species === 'bomb') {
+                                // 炸彈蟲：比 Boss 小一點點，但有存在感
+                                bombChance = 0.025;
+                            }
+
                             if (dist < TILE_SIZE * 4 && Math.random() < bombChance) {
-                                // Smart Check: Don't bomb if trapped
                                 const gridPos = this.getGridPos();
                                 const openPaths = this.countOpenPaths(game, gridPos);
-                                if (openPaths > 0) {
-                                    this.placeBomb(game);
-                                }
+                                if (openPaths > 0) this.placeBomb(game);
                             }
                         }
                     }
                 }
 
-                // Powerup Collection (Boss Only)
                 if (this.isBoss) {
                     const center = this.getGridPos();
                     const pIndex = game.powerups.findIndex(p => p.c === center.c && p.r === center.r);
@@ -1165,7 +1230,6 @@
                     }
                 }
 
-                // Check Damage
                 if (this.invincible <= 0) {
                     const pos = this.getGridPos();
                     if (game.explosions.some(e => e.c === pos.c && e.r === pos.r)) {
@@ -1177,7 +1241,7 @@
             takeDamage() {
                 if (this.lives > 0) {
                     this.lives--;
-                    this.invincible = 2; // Invincible frames
+                    this.invincible = 2;
                     AudioEngine.playBossHit();
                     if (this.lives <= 0) {
                         this.alive = false;
@@ -1213,17 +1277,24 @@
             }
 
             placeBomb(game) {
+                // 非Boss的炸彈蟲也會炸（但弱一些）
+                if (!this.isBoss && this.species === 'bomb') {
+                    if (this.placedBombs >= this.maxBombs) return;
+                }
+
                 const pos = this.getGridPos();
                 if (game.bombs.some(b => b.c === pos.c && b.r === pos.r)) return;
                 
                 const bomb = new Bomb(pos.c, pos.r, this.bombRange, this, game);
                 game.bombs.push(bomb);
                 this.placedBombs++;
-                // Rage mode has lower cooldown
-                this.bombCooldown = this.lives < 3 ? 1.5 : 3; 
+
+                // cooldown：炸彈蟲慢一點（更像「爬行＋偶爾爆」）
+                if (this.isBoss) this.bombCooldown = this.lives < 3 ? 1.5 : 3;
+                else this.bombCooldown = 3.5;
+
                 AudioEngine.playBombPlant();
                 
-                // Smart Escape logic
                 const neighbors = [
                     {x: 1, y: 0, r: pos.r, c: pos.c + 1},
                     {x: -1, y: 0, r: pos.r, c: pos.c - 1},
@@ -1248,12 +1319,11 @@
             }
 
             draw(ctx) {
-                // Flash if invincible
                 if (this.invincible > 0 && Math.floor(Date.now() / 50) % 2 === 0) return;
 
+                // ✅ 顏色（保留原本風格）＋ 外觀 emoji（新增，不破壞原設定）
                 if (this.isBoss) {
-                    // Boss Color
-                    ctx.fillStyle = this.lives < 3 ? '#e056fd' : '#8e44ad'; // Purple / Light Purple when angry
+                    ctx.fillStyle = this.lives < 3 ? '#e056fd' : '#8e44ad';
                 } else {
                     if (this.difficulty === 'easy') ctx.fillStyle = '#1dd1a1'; 
                     else if (this.difficulty === 'normal') ctx.fillStyle = '#ff9f43'; 
@@ -1261,12 +1331,11 @@
                 }
 
                 ctx.beginPath();
-                // Make Boss Bigger
                 const sizeMod = this.isBoss ? 4 : 0;
                 const w = Math.sin(Date.now() / 100) * 2;
                 ctx.arc(this.x + TILE_SIZE/2, this.y + TILE_SIZE/2, (this.w/2) + sizeMod - 2 + w, 0, Math.PI*2);
                 ctx.fill();
-                
+
                 // Angry eyebrows
                 if (this.difficulty === 'hard' || (this.isBoss && this.lives < 3)) {
                     ctx.fillStyle = '#000';
@@ -1277,7 +1346,7 @@
                     ctx.lineTo(this.x + 35 + sizeMod, this.y + 30 - sizeMod);
                     ctx.stroke();
                 }
-                
+
                 // Draw Crown for Boss
                 if (this.isBoss) {
                     ctx.fillStyle = 'gold';
@@ -1293,6 +1362,16 @@
                 ctx.fillStyle = '#000';
                 ctx.fillRect(this.x + 20, this.y + 25, 5, 5);
                 ctx.fillRect(this.x + 40, this.y + 25, 5, 5);
+
+                // ✅ 用 emoji 小標記（不影響碰撞/尺寸）
+                ctx.font = '18px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                let emoji = this.animalSet[2]; // 第三種
+                if (this.isBoss) emoji = '👑';
+                else if (this.species === 'veg') emoji = this.animalSet[0];
+                else if (this.species === 'bomb') emoji = this.animalSet[1];
+                ctx.fillText(emoji, this.x + TILE_SIZE/2, this.y + TILE_SIZE/2 + 2);
             }
         }
 
